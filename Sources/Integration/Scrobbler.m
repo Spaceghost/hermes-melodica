@@ -48,6 +48,27 @@
   [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
+- (void)submitMelodica:(Song *)song duration:(double)seconds final:(BOOL)final {
+  if (!song.title.length || !song.artist.length || !song.token.length) return;
+  NSString *token = KeychainGetPassword(@"melodica-scrobbles");
+  if (!token.length) return;
+  NSDictionary *info = @{@"submission_client": @"Hermes Melodica", @"music_service": @"pandora.com",
+                         @"duration_ms": @((long long)(seconds * 1000))};
+  NSMutableDictionary *meta = [@{@"artist_name": song.artist, @"track_name": song.title,
+                                @"additional_info": info} mutableCopy];
+  if (song.album.length) meta[@"release_name"] = song.album;
+  NSMutableDictionary *listen = [@{@"track_metadata": meta} mutableCopy];
+  if (final) listen[@"listened_at"] = @((long long)song.playDate.timeIntervalSince1970);
+  NSDictionary *body = @{@"listen_type": final ? @"single" : @"playing_now", @"payload": @[listen]};
+  NSURL *url = [NSURL URLWithString:@"https://spacegho.st/scrobble/1/submit-listens"];
+  NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+  request.HTTPMethod = @"POST";
+  [request setValue:[@"Token " stringByAppendingString:token] forHTTPHeaderField:@"Authorization"];
+  [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+  request.HTTPBody = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
+  [[[NSURLSession sharedSession] dataTaskWithRequest:request] resume];
+}
+
 typedef void(^ScrobblerCallback)(NSDictionary*);
 
 /**

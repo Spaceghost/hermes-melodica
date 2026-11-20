@@ -289,6 +289,26 @@ BOOL playOnStart = YES;
     (int) (prog / 60), ((int) prog) % 60, (int) (dur / 60), ((int) dur) % 60]];
   [playbackProgress setDoubleValue:100 * prog / dur];
 
+  Song *song = [playing playingSong];
+  NSTimeInterval tick = [NSProcessInfo processInfo].systemUptime;
+  if (song && ![playing isPaused] && prog > 0) {
+    if (!melodicaNowSent) {
+      melodicaNowSent = YES;
+      [SCROBBLER submitMelodica:song duration:dur final:NO];
+    }
+    NSTimeInterval delta = prog - melodicaLastPosition;
+    NSTimeInterval wall = tick - melodicaLastTick;
+    if (melodicaLastTick > 0 && delta > 0 && delta <= wall + 1 && wall < 8) {
+      melodicaHeard += MIN(delta, wall);
+    }
+    if (!melodicaListenSent && dur > 30 && melodicaHeard >= MIN(dur / 2, 240)) {
+      melodicaListenSent = YES;
+      [SCROBBLER submitMelodica:song duration:dur final:YES];
+    }
+  }
+  melodicaLastPosition = prog;
+  melodicaLastTick = tick;
+
   /* See http://www.last.fm/api/scrobbling#when-is-a-scrobble-a-scrobble for
      figuring out when a track should be scrobbled */
   if (!scrobbleSent && dur > 30 && (prog * 2 > dur || prog > 4 * 60)) {
@@ -378,6 +398,9 @@ BOOL playOnStart = YES;
   }
   [progressLabel setStringValue: @"0:00/0:00"];
   scrobbleSent = NO;
+  melodicaNowSent = melodicaListenSent = NO;
+  melodicaHeard = melodicaLastPosition = 0;
+  melodicaLastTick = [NSProcessInfo processInfo].systemUptime;
 
   if ([[song nrating] intValue] == 1) {
     [toolbar setSelectedItemIdentifier:[like itemIdentifier]];

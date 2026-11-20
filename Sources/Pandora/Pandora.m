@@ -115,6 +115,7 @@ static NSString *hierrs[] = {
 #pragma mark - Pandora
 
 @interface Pandora ()
+@property (nonatomic, copy) NSString *melodicaAccess;
 
 // Convenience methods to post notifications.
 - (void)postNotification:(NSString *)notificationName;
@@ -324,6 +325,7 @@ static NSString *hierrs[] = {
 }
 
 - (void) logoutNoNotify {
+  self.melodicaAccess = nil;
   user_auth_token = nil;
   partner_auth_token = nil;
   partner_id = nil;
@@ -811,22 +813,24 @@ static NSString *hierrs[] = {
 
 
 - (BOOL) sendRequest: (PandoraRequest*) request {
-  NSString *url  = [NSString stringWithFormat:
-                    @"http%s://%@" PANDORA_API_PATH
-                    @"?method=%@&partner_id=%@&auth_token=%@&user_id=%@",
-                    [request tls] ? "s" : "",
-                    self.device[kPandoraDeviceAPIHost],
+  BOOL relay = [self.device[kPandoraDeviceUsername] isEqualToString:@"android"];
+  NSString *endpoint = relay ? @"https://spacegho.st/melodica/api/" :
+      [NSString stringWithFormat:@"https://%@" PANDORA_API_PATH, self.device[kPandoraDeviceAPIHost]];
+  NSString *url = [NSString stringWithFormat:@"%@?method=%@&partner_id=%@&auth_token=%@&user_id=%@", endpoint,
                     [request method],
                     [request partnerId],
                     [[request authToken] urlEncoded],
                     [request userId]];
-  NSLogd(@"%@", url);
+  NSLogd(@"Tuner method %@", request.method);
   
   /* Prepare the request */
   NSURL *nsurl = [NSURL URLWithString:url];
   NSMutableURLRequest *nsrequest = [NSMutableURLRequest requestWithURL:nsurl];
   [nsrequest setHTTPMethod: @"POST"];
-  [nsrequest addValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+  [nsrequest addValue:@"text/plain" forHTTPHeaderField:@"Content-Type"];
+  BOOL login = [request.method isEqualToString:@"auth.userLogin"];
+  if (relay && login) self.melodicaAccess = nil;
+  else if (relay && self.melodicaAccess) [nsrequest setValue:self.melodicaAccess forHTTPHeaderField:@"x-melodica-access"];
   
   /* Create the body */
   NSData *data = [NSJSONSerialization dataWithJSONObject:request.request options:0 error:nil];
@@ -873,6 +877,11 @@ static NSString *hierrs[] = {
                                                                           object:self
                                                                         userInfo:info];
                     }];
+  if (relay && login) {
+    c.responseHeaders = ^(CFHTTPMessageRef response) {
+      self.melodicaAccess = CFBridgingRelease(CFHTTPMessageCopyHeaderFieldValue(response, CFSTR("x-melodica-access")));
+    };
+  }
   [c start];
   return TRUE;
 }

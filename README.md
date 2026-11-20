@@ -1,3 +1,9 @@
+# Hermes for Melodica
+
+Hermes uses the Melodica tuner codec for station and playlist requests. For Spaceghost Scrobbles, create a client token at https://spacegho.st/scrobble/account/. In macOS Keychain Access add a password named Hermes with the account melodica-scrobbles and the token as its password. Delete that item to disconnect. A song appears as playing when audio advances and enters history after half the song or four minutes. The original Last.fm setting is independent.
+
+Build the Hermes Xcode project on macOS.
+
 Hermes
 ======
 

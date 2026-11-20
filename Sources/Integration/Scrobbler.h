@@ -23,6 +23,7 @@ typedef enum {
   BOOL inAuthorization;
 }
 
+- (void)submitMelodica:(Song *)song duration:(double)seconds final:(BOOL)final;
 - (void) setPreference: (Song*)song loved:(BOOL)loved;
 - (void) scrobble: (Song*) song state: (ScrobbleState) status;
 

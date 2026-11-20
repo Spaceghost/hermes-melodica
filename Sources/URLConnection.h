@@ -15,6 +15,8 @@ extern NSString * const URLConnectionProxyValidityChangedNotification;
 + (void) setHermesProxy: (CFReadStreamRef) stream;
 + (BOOL) validProxyHost:(NSString **)host port:(NSInteger)port;
 
+@property (nonatomic, copy) void (^responseHeaders)(CFHTTPMessageRef);
+
 - (void) start;
 - (void) setHermesProxy;
 

@@ -1,62 +1,40 @@
-#include "blowfish/blowfish.h"
-
 #import "Crypt.h"
+#include "melodica/blowfish.c"
+#include "melodica/wire.c"
 
-/* Conversion from hex to int and int to hex */
-static char i2h[16] = "0123456789abcdef";
-static char h2i[256] = {
-  ['0'] = 0, ['1'] = 1, ['2'] = 2, ['3'] = 3, ['4'] = 4, ['5'] = 5, ['6'] = 6,
-  ['7'] = 7, ['8'] = 8, ['9'] = 9, ['a'] = 10, ['b'] = 11, ['c'] = 12,
-  ['d'] = 13, ['e'] = 14, ['f'] = 15
-};
-
-static void appendByte(unsigned char byte, void *_data) {
-  NSMutableData *data = (__bridge NSMutableData *)_data;
-  [data appendBytes:&byte length:1];
+static int hexDigit(unichar ch) {
+  if (ch >= '0' && ch <= '9') return ch - '0';
+  if (ch >= 'a' && ch <= 'f') return ch - 'a' + 10;
+  if (ch >= 'A' && ch <= 'F') return ch - 'A' + 10;
+  return -1;
 }
 
-static void appendHex(unsigned char byte, void *_data) {
-  NSMutableData *data = (__bridge NSMutableData *)_data;
-  char bytes[2];
-  bytes[1] = i2h[byte % 16];
-  bytes[0] = i2h[byte / 16];
-  [data appendBytes:bytes length:2];
-}
-
-NSData* PandoraDecryptString(NSString *string, NSString *decryptionKey) {
-  struct blf_ecb_ctx ctx;
-  NSMutableData *mut = [[NSMutableData alloc] init];
-  const char *key = decryptionKey.UTF8String;
-  
-  Blowfish_ecb_start(&ctx, FALSE, (const unsigned char *)key,
-                     strlen(key), appendByte,
-                     (__bridge void *)mut);
-
-  const char *bytes = [string cStringUsingEncoding:NSASCIIStringEncoding];
-  NSUInteger len = [string lengthOfBytesUsingEncoding:NSASCIIStringEncoding];
-  for (NSUInteger i = 0; i < len; i += 2) {
-    Blowfish_ecb_feed(&ctx, h2i[(int) bytes[i]] * 16 + h2i[(int) bytes[i + 1]]);
+NSData *PandoraDecryptString(NSString *string, NSString *key) {
+  if (string.length % 16) return nil;
+  NSMutableData *data = [NSMutableData dataWithLength:string.length / 2];
+  uint8_t *bytes = data.mutableBytes;
+  for (NSUInteger i = 0; i < data.length; i++) {
+    int hi = hexDigit([string characterAtIndex:i*2]);
+    int lo = hexDigit([string characterAtIndex:i*2+1]);
+    if (hi < 0 || lo < 0) return nil;
+    bytes[i] = (hi << 4) | lo;
   }
-  Blowfish_ecb_stop(&ctx);
-
-  return mut;
+  NSData *keyData = [key dataUsingEncoding:NSUTF8StringEncoding];
+  return melodica_wire_blocks(bytes, data.length, keyData.bytes, keyData.length, 1) ? data : nil;
 }
 
-NSData* PandoraEncryptData(NSData *data, NSString *encryptionKey) {
-  struct blf_ecb_ctx ctx;
-  NSMutableData *mut = [[NSMutableData alloc] init];
-  const char *key = encryptionKey.UTF8String;
-
-  Blowfish_ecb_start(&ctx, TRUE, (const unsigned char *)key,
-                     strlen(key), appendHex,
-                     (__bridge void*)mut);
-
-  const char *bytes = [data bytes];
-  NSUInteger len = [data length];
-  for (NSUInteger i = 0; i < len; i++) {
-    Blowfish_ecb_feed(&ctx, bytes[i]);
+NSData *PandoraEncryptData(NSData *input, NSString *key) {
+  static const char hex[] = "0123456789abcdef";
+  NSMutableData *padded = [input mutableCopy];
+  [padded setLength:((input.length + 7) / 8) * 8];
+  NSData *keyData = [key dataUsingEncoding:NSUTF8StringEncoding];
+  if (!melodica_wire_blocks(padded.mutableBytes, padded.length, keyData.bytes, keyData.length, 0)) return nil;
+  NSMutableData *result = [NSMutableData dataWithLength:padded.length * 2];
+  const uint8_t *from = padded.bytes;
+  char *to = result.mutableBytes;
+  for (NSUInteger i = 0; i < padded.length; i++) {
+    to[2*i] = hex[from[i] >> 4];
+    to[2*i+1] = hex[from[i] & 15];
   }
-  Blowfish_ecb_stop(&ctx);
-
-  return mut;
+  return result;
 }

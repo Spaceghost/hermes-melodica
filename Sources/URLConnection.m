@@ -23,6 +23,13 @@ static void URLConnectionStreamCallback(CFReadStreamRef aStream,
       conn->cb(nil, (__bridge_transfer NSError*) CFReadStreamCopyError(aStream));
       break;
     case kCFStreamEventEndEncountered: {
+      if (conn.responseHeaders) {
+        CFHTTPMessageRef response = (CFHTTPMessageRef)CFReadStreamCopyProperty(aStream, kCFStreamPropertyHTTPResponseHeader);
+        if (response) {
+          conn.responseHeaders(response);
+          CFRelease(response);
+        }
+      }
       conn->cb(conn->bytes, nil);
       break;
     }
@@ -81,17 +88,7 @@ static void URLConnectionStreamCallback(CFReadStreamRef aStream,
   c->stream = CFReadStreamCreateForHTTPRequest(NULL, message);
   CFRelease(message);
 
-  /* Handle SSL connections */
-  NSString *urlstring = [[request URL] absoluteString];
-  if ([urlstring rangeOfString:@"https"].location == 0) {
-    NSDictionary *settings =
-    @{(id)kCFStreamSSLLevel: (NSString *)kCFStreamSocketSecurityLevelNegotiatedSSL,
-     (id)kCFStreamSSLValidatesCertificateChain: @NO,
-     (id)kCFStreamSSLPeerName: [NSNull null]};
-
-    CFReadStreamSetProperty(c->stream, kCFStreamPropertySSLSettings,
-                            (__bridge CFDictionaryRef) settings);
-  }
+  /* CFNetwork validates the HTTPS certificate chain and host name by default. */
 
   c->cb = [cb copy];
   c->bytes = [NSMutableData dataWithCapacity:100];

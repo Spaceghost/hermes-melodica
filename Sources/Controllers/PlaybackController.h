@@ -35,6 +35,8 @@
 
   NSTimer *progressUpdateTimer;
   BOOL scrobbleSent;
+  NSTimeInterval melodicaLastPosition, melodicaHeard, melodicaLastTick;
+  BOOL melodicaNowSent, melodicaListenSent;
   NSString *lastImgSrc;
   NSData *lastImg;
 }
